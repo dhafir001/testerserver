@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BLINDSPOT — Psychological Horror 3D Web Game</title>
+
+  <!-- Google Fonts: Cinzel, Syne, Creepster, Nosifer, Share Tech Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Creepster&family=Nosifer&family=Share+Tech+Mono&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+
+  <!-- Three.js r128 WebGL 3D Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- Stylesheet (Flat Directory) -->
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="quality-high">
+
+  <!-- Audio Elements (Menu BGM & Corridor Ambience Loop) -->
+  <audio id="bgm-audio" loop preload="auto" data-audio-path="assets/audio/bgm_menu.mp3"></audio>
+  <audio id="ambience-game-audio" loop preload="auto" data-audio-path="assets/audio/ambience_game.mp3"></audio>
+
+  <!-- Visual Background & Post-Processing Layers (Main Menu) -->
+  <canvas id="scene-canvas" aria-hidden="true"></canvas>
+  <div id="ambient-flicker" aria-hidden="true"></div>
+
+  <!-- Peripheral Silhouette Entity (Visual Blindspot) -->
+  <div id="blindspot-layer" aria-hidden="true">
+    <svg id="blindspot-entity" class="blindspot-entity" viewBox="0 0 160 380" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="shadowGrad" cx="50%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#0a0c10" stop-opacity="0.96"/>
+          <stop offset="70%" stop-color="#030406" stop-opacity="0.82"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <path fill="url(#shadowGrad)" d="M80 18 C62 18 52 34 54 56 C55 69 62 79 68 85 C42 96 26 124 22 172 C18 220 26 285 32 375 L128 375 C134 285 142 220 138 172 C134 124 118 96 92 85 C98 79 105 69 106 56 C108 34 98 18 80 18 Z"/>
+      <circle class="entity-eyes" cx="70" cy="50" r="2.2" />
+      <circle class="entity-eyes" cx="90" cy="50" r="2.2" />
+    </svg>
+  </div>
+
+  <canvas id="grain-canvas" aria-hidden="true"></canvas>
+  <div id="crt-scanlines" aria-hidden="true"></div>
+  <div id="vignette-layer" aria-hidden="true"></div>
+
+  <!-- Autoplay Policy Interaction Gate Overlay -->
+  <div id="autoplay-overlay" role="button" tabindex="0" aria-label="Klik di mana saja untuk memulai pengalaman audio dan masuk ke Main Menu">
+    <div class="gate-warning-tag">// PERINGATAN PSIKOLOGIS &amp; SENSORIK //</div>
+    <div class="gate-headphone-box">
+      <p>
+        <strong>BLINDSPOT</strong> menggunakan desain suara binaural frekuensi rendah, pencahayaan berkedip (flicker), dan distorsi visual sudut mata.<br><br>
+        Gunakan <strong>Headphone</strong> di ruangan gelap untuk atmosfer maksimal.
+      </p>
+    </div>
+    <div class="gate-prompt">KLIK DI MANA SAJA UNTUK MEMULAI</div>
+  </div>
+
+  <!-- Main Menu Interface -->
+  <main id="main-menu-wrapper">
+    <!-- Top HUD Telemetry -->
+    <header class="hud-top-bar">
+      <div class="hud-rec">
+        <span class="rec-dot"></span>
+        <span>CAM_04 // SECTOR: SUB-BASEMENT</span>
+      </div>
+      <div class="hud-telemetry">
+        <div id="hud-clock">OCT 29 // 03:14:09 AM</div>
+        <div id="hud-fov-status">OPTIC_SENS: 1.0x | QUALITY: HIGH</div>
+      </div>
+    </header>
+
+    <!-- Center Title & Navigation -->
+    <section class="menu-center-stage" aria-label="Menu Utama Blindspot">
+      <p class="psychological-pretitle">JANGAN PERCAYA SUDUT MATAMU</p>
+
+      <div class="title-container">
+        <h1 id="game-title" class="game-title chromatic-glitch" data-text="BLINDSPOT">BLINDSPOT</h1>
+        <div class="game-title-horror-echo" aria-hidden="true">BLINDSPOT</div>
+      </div>
+
+      <p class="title-tagline">&ldquo;Ketika kamu menoleh, ia sudah berpindah.&rdquo;</p>
+
+      <nav class="menu-nav" aria-label="Navigasi Game">
+        <button type="button" id="btn-start-game" class="menu-btn" data-ui-sfx="true">
+          START GAME
+        </button>
+        <button type="button" id="btn-open-settings" class="menu-btn" data-ui-sfx="true">
+          SETTINGS
+        </button>
+        <button type="button" id="btn-open-credits" class="menu-btn" data-ui-sfx="true">
+          CREDITS / QUIT
+        </button>
+      </nav>
+    </section>
+
+    <!-- Bottom HUD Status -->
+    <footer class="hud-bottom-bar">
+      <div>BUILD v1.0.5 // THREE.JS WEBGL-3D ENGINE READY</div>
+      <div id="blindspot-status" class="blindspot-alert-indicator">PERIPHERAL_SCAN: STABLE</div>
+    </footer>
+  </main>
+
+  <!-- Modal 1: Settings -->
+  <div id="settings-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="horror-modal">
+      <div class="modal-header">
+        <h2 id="settings-modal-title" class="modal-title">SYSTEM SETTINGS</h2>
+        <button type="button" id="btn-close-settings-x" class="modal-close-icon" data-ui-sfx="true" aria-label="Tutup Pengaturan">ESC [X]</button>
+      </div>
+
+      <!-- Audio Section -->
+      <div class="settings-section">
+        <div class="section-label">AUDIO &amp; FREKUENSI</div>
+
+        <div class="setting-row">
+          <label for="slider-master-vol" class="setting-name">Master Volume (BGM Real-Time)</label>
+          <div class="setting-control">
+            <input type="range" id="slider-master-vol" class="horror-slider" min="0" max="100" step="1" value="75" />
+            <span id="label-master-vol" class="setting-val-badge">75%</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <label for="slider-sfx-vol" class="setting-name">SFX Volume (UI &amp; Atmosfer)</label>
+          <div class="setting-control">
+            <input type="range" id="slider-sfx-vol" class="horror-slider" min="0" max="100" step="1" value="80" />
+            <span id="label-sfx-vol" class="setting-val-badge">80%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Control / Input Section -->
+      <div class="settings-section">
+        <div class="section-label">KONTROL &amp; OPTIK</div>
+
+        <div class="setting-row">
+          <label for="slider-mouse-sens" class="setting-name">Mouse Sensitivity</label>
+          <div class="setting-control">
+            <input type="range" id="slider-mouse-sens" class="horror-slider" min="0.1" max="3.0" step="0.1" value="1.0" />
+            <span id="label-mouse-sens" class="setting-val-badge">1.0x</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-name">Invert Y-Axis</span>
+          <div class="setting-control">
+            <button type="button" id="toggle-invert-y" class="horror-toggle-btn" aria-pressed="false" data-ui-sfx="true">
+              OFF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Graphics / Web Performance Section -->
+      <div class="settings-section">
+        <div class="section-label">GRAFIK (WEB PERFORMANCE)</div>
+
+        <div class="setting-row">
+          <label for="select-graphics-quality" class="setting-name">Graphics Quality</label>
+          <div class="setting-control">
+            <select id="select-graphics-quality" class="horror-select" data-ui-sfx="true">
+              <option value="Low">LOW</option>
+              <option value="Medium">MEDIUM</option>
+              <option value="High" selected>HIGH</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-name">Post-Processing (Grain &amp; Chromatic)</span>
+          <div class="setting-control">
+            <button type="button" id="toggle-postfx" class="horror-toggle-btn" aria-pressed="true" data-ui-sfx="true">
+              ON
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div id="settings-save-status" class="save-status-msg">PREFERENSI SIAP DISIMPAN</div>
+        <div class="modal-actions">
+          <button type="button" id="btn-reset-settings" class="action-btn secondary" data-ui-sfx="true">
+            DEFAULT
+          </button>
+          <button type="button" id="btn-save-settings" class="action-btn" data-ui-sfx="true">
+            SAVE &amp; CLOSE
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Credits / Quit Warning Pop-Up -->
+  <div id="credits-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="credits-modal-title">
+    <div class="horror-modal">
+      <div class="modal-header">
+        <h2 id="credits-modal-title" class="modal-title">CREDITS // PERINGATAN</h2>
+        <button type="button" id="btn-close-credits-x" class="modal-close-icon" data-ui-sfx="true" aria-label="Tutup Credits">ESC [X]</button>
+      </div>
+
+      <div class="credits-box">
+        <p><strong>BLINDSPOT — 3D WEB PSYCHOLOGICAL HORROR</strong></p>
+        <p>Direction &amp; Atmosphere Architecture: <strong>Studio Voidsector</strong></p>
+        <p>Audio Path Integration: <code>assets/audio/bgm_menu.mp3</code>, <code>intro_01..12.mp3</code>, <code>phone_01..05.mp3</code>, <code>game_start_01..03.mp3</code></p>
+        <p>3D Engine: Three.js WebGL FPP Bedroom, Procedural Furniture, Flashlight &amp; Diegetic Smartphone</p>
+      </div>
+
+      <div class="quit-warning-box">
+        <strong>PERINGATAN:</strong> Memutuskan sesi sekarang akan menghentikan rekaman pengawasan <em>CAM_04</em>. Apa pun yang berdiri di titik butamu tidak akan ikut menghilang saat layar dimatikan.
+      </div>
+
+      <div class="modal-footer">
+        <div id="quit-feedback-msg" class="save-status-msg">STATUS: TERKUNCI DI DALAM KORIDOR</div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-quit" class="action-btn secondary" data-ui-sfx="true">
+            KEMBALI KE MENU
+          </button>
+          <button type="button" id="btn-confirm-quit" class="action-btn" data-ui-sfx="true">
+            TERMINATE SESSION (QUIT)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fade-to-Black Curtain Overlay -->
+  <div id="blackout-curtain" aria-hidden="true"></div>
+
+  <!-- Voice-Over Intro Sequencer & Subtitle Overlay -->
+  <section id="intro-sequencer-overlay" aria-live="polite" aria-hidden="true">
+    <div class="vo-log-header">
+      <span class="vo-wave-indicator"></span>
+      <span id="vo-log-counter">VOICE_LOG // 01 / 12</span>
+    </div>
+
+    <div class="subtitle-stage">
+      <p id="intro-subtitle-text"></p>
+    </div>
+
+    <button type="button" id="btn-skip-intro">
+      [Space / Klik] Lewati Intro
+    </button>
+  </section>
+
+  <!-- FPP In-Game 3D Viewport (Three.js Bedroom Scene) -->
+  <section id="game-viewport-container" aria-hidden="true">
+    <!-- Initial Awakening Eyelids (2s transition) -->
+    <div id="eyelid-top" class="eyelid-curtain" aria-hidden="true"></div>
+    <div id="eyelid-bottom" class="eyelid-curtain" aria-hidden="true"></div>
+
+    <!-- In-Game Manual Blink Overlay ([Spacebar] 0.4s) -->
+    <div id="eyelids-overlay" aria-hidden="true"></div>
+
+    <!-- Three.js WebGL Canvas -->
+    <canvas id="gameCanvas" style="display: none;"></canvas>
+
+    <!-- Raycaster Center Prompt ([E] Ambil Kunci / [E] Buka Pintu) -->
+    <div id="fpp-interaction-prompt" aria-live="polite"></div>
+
+    <!-- In-Game Bahasa Indonesia Voice-Over & Monologue Subtitle Box -->
+    <div id="fpp-subtitle-box" aria-live="polite">
+      <span id="fpp-subtitle-speaker">MAYA:</span>
+      <p id="fpp-subtitle-text"></p>
+    </div>
+
+    <!-- Diegetic Smartphone Overlay ([TAB / H]) -->
+    <aside id="diegetic-smartphone" aria-hidden="true" aria-label="Smartphone Maya">
+      <div class="phone-screen">
+        <div class="phone-statusbar">
+          <span id="phone-signal-indicator" class="phone-signal-wrap">
+            <span class="signal-bar-unstable">&#9602;</span> 1 BAR // UNSTABLE
+          </span>
+          <span id="phone-glitch-clock">03:14</span>
+        </div>
+
+        <!-- Daftar Obrolan Grup yang Terhenti -->
+        <div class="phone-section-title">PESAN GRUP // TIDAK ADA RESPONS</div>
+        <div class="phone-chat-list">
+          <div class="phone-chat-item">
+            <div class="phone-chat-header">
+              <span>Campus Group (48)</span>
+              <span class="phone-chat-time">21:42 &bull; Mati</span>
+            </div>
+            <div class="phone-chat-preview">
+              &ldquo;Sirene kampus bunyi terus... kok nggak ada satupun yang balas chat?!&rdquo;
+            </div>
+          </div>
+          <div class="phone-chat-item">
+            <div class="phone-chat-header">
+              <span>Apartment 3rd Floor</span>
+              <span class="phone-chat-time">22:15 &bull; Mati</span>
+            </div>
+            <div class="phone-chat-preview">
+              &ldquo;Listrik lantai 3 padam total! Kunci pintu kamar kalian sekarang!!&rdquo;
+            </div>
+          </div>
+        </div>
+
+        <!-- Daftar Kontak Darurat: Mark & Mom / Ibu -->
+        <div class="phone-section-title">KONTAK DARURAT</div>
+        <div class="phone-contacts-list">
+          <!-- Kontak 1: Mark -->
+          <div id="phone-row-mark" class="phone-contact-row">
+            <div class="phone-contact-row-top">
+              <span class="phone-contact-label">MARK</span>
+              <span id="phone-call-status" class="phone-contact-sub">SIAP DIHUBUNGI</span>
+            </div>
+            <button type="button" id="btn-call-mark">
+              TELEPON MARK [ENTER / KLIK]
+            </button>
+          </div>
+
+          <!-- Kontak 2: Mom / Ibu -->
+          <div id="phone-row-mom" class="phone-contact-row mom-highlight">
+            <div class="phone-contact-row-top">
+              <span class="phone-contact-label">MOM / IBU</span>
+              <span id="phone-mom-status" class="phone-contact-sub">LUAR KOTA // 1 BAR</span>
+            </div>
+            <button type="button" id="btn-call-mom">
+              TELEPON MOM / IBU [ENTER / KLIK]
+            </button>
+          </div>
+        </div>
+
+        <div id="phone-audio-wave" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+
+        <div id="phone-noservice-banner" role="alert">
+          TIDAK ADA LAYANAN / NO SERVICE
+        </div>
+
+        <div class="phone-hint-footer">
+          [TAB / H] Buka/Tutup Ponsel &bull; [ENTER] Panggil
+        </div>
+      </div>
+    </aside>
+
+    <!-- FPP HUD Overlay -->
+    <div id="fpp-hud-overlay">
+      <div class="fpp-top-row">
+        <div id="fpp-objective-text">OBJEKTIF: Periksa ponselmu dan telepon Mark</div>
+        <div class="fpp-hud-status-group">
+          <span id="fpp-speaking-lock-badge">MONOLOG AKTIF [INTERAKSI DIKUNCI]</span>
+          <span id="fpp-flashlight-status" class="fpp-equip-badge">[F] SENTER: MATI</span>
+          <span id="fpp-key-status" class="fpp-equip-badge">KUNCI KAMAR: BELUM ADA</span>
+          <span id="fpp-pointerlock-status" class="fpp-equip-badge">[ESC] MENU JEDA</span>
+        </div>
+      </div>
+
+      <div class="fpp-reticle" aria-hidden="true"></div>
+
+      <div class="fpp-bottom-row">
+        <span>[WASD] Jalan &bull; [F] Senter &bull; [TAB/H] Ponsel &bull; [E] Interaksi &bull; [SPACE] Kedip</span>
+        <button type="button" id="btn-exit-to-menu" class="action-btn secondary" data-ui-sfx="true">
+          KEMBALI KE MENU
+        </button>
+      </div>
+    </div>
+
+    <!-- Menu Pause [ESC] (Diegetic / Clean Horror Pause UI) -->
+    <div id="pause-menu-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title" aria-hidden="true">
+      <div class="pause-modal-card">
+        <h2 id="pause-menu-title" class="pause-title">BLINDSPOT - JEDA</h2>
+        <p class="pause-subtitle">PERMAINAN DIJEDA SEMENTARA // [ESC]</p>
+
+        <div class="pause-btn-group">
+          <button type="button" id="btn-pause-resume" class="menu-btn" data-ui-sfx="true">
+            Lanjutkan
+          </button>
+          <button type="button" id="btn-pause-settings" class="menu-btn" data-ui-sfx="true">
+            Pengaturan
+          </button>
+          <button type="button" id="btn-pause-quit" class="menu-btn" data-ui-sfx="true">
+            Keluar ke Menu Utama
+          </button>
+        </div>
+
+        <!-- Sub-Panel Pengaturan di dalam Menu Pause -->
+        <div id="pause-settings-drawer">
+          <div class="setting-row">
+            <label for="pause-slider-master" class="setting-name">Master Audio</label>
+            <div class="setting-control">
+              <input type="range" id="pause-slider-master" class="horror-slider" min="0" max="100" step="1" value="75" />
+              <span id="pause-label-master" class="setting-val-badge">75%</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="pause-slider-sfx" class="setting-name">SFX Volume</label>
+            <div class="setting-control">
+              <input type="range" id="pause-slider-sfx" class="horror-slider" min="0" max="100" step="1" value="80" />
+              <span id="pause-label-sfx" class="setting-val-badge">80%</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="pause-slider-sens" class="setting-name">Sensitivitas Mouse</label>
+            <div class="setting-control">
+              <input type="range" id="pause-slider-sens" class="horror-slider" min="0.1" max="3.0" step="0.1" value="1.0" />
+              <span id="pause-label-sens" class="setting-val-badge">1.0x</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Konfirmasi Keluar ke Menu Utama -->
+        <div id="pause-quit-confirm-box">
+          <p class="pause-confirm-text">Apakah Anda yakin ingin keluar ke Menu Utama?</p>
+          <div class="pause-confirm-actions">
+            <button type="button" id="btn-pause-quit-cancel" class="action-btn secondary">Batal</button>
+            <button type="button" id="btn-pause-quit-confirm" class="action-btn">Ya, Keluar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Legacy Transition Container -->
+  <div id="game-transition-screen" aria-hidden="true" style="display: none; opacity: 0; pointer-events: none;">
+    <p id="transition-epigraph" class="transition-epigraph"></p>
+    <div id="loading-telemetry" class="loading-telemetry"></div>
+    <button type="button" id="return-menu-btn" class="action-btn secondary">KEMBALI KE MAIN MENU</button>
+  </div>
+
+  <!-- Fail-Safe Autoplay Gate Dismissal -->
+  <script>
+    (function () {
+      var overlay = document.getElementById('autoplay-overlay');
+      if (overlay) {
+        var dismissGateFallback = function () {
+          window.__blindspotGateClickedEarly = true;
+          if (typeof window.__blindspotUnlockGate === 'function') {
+            window.__blindspotUnlockGate();
+          } else {
+            overlay.classList.add('dismissed');
+            overlay.style.opacity = '0';
+            overlay.style.pointerEvents = 'none';
+            setTimeout(function () {
+              overlay.style.display = 'none';
+            }, 1300);
+          }
+        };
+        overlay.addEventListener('click', dismissGateFallback);
+        overlay.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            dismissGateFallback();
+          }
+        });
+      }
+    })();
+  </script>
+
+  <!-- Seluruh Modul Skrip dalam Flat Directory (./) -->
+  <script defer src="./SettingsManager.js"></script>
+  <script defer src="./HorrorAudioEngine.js"></script>
+  <script defer src="./HorrorVisualRenderer.js"></script>
+  <script defer src="./BlindspotAnomalyController.js"></script>
+  <script defer src="./IntroSequencer.js"></script>
+  <script defer src="./floorThreeExpansion.js"></script>
+  <script defer src="./gameScene.js"></script>
+  <script defer src="./MainMenuUIController.js"></script>
+  <script defer src="./main.js"></script>
+</body>
+</html>
